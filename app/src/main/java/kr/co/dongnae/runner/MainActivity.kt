@@ -24,6 +24,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kr.co.dongnae.runner.presentation.login.LoginScreen
 import kr.co.dongnae.runner.presentation.splash.SplashScreen
 import kr.co.dongnae.runner.screen.RunScreen
+import kr.co.dongnae.runner.screen.RunningScreen
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -39,6 +40,15 @@ class MainActivity : ComponentActivity() {
 fun DongnaeRunnerApp() {
     val navController = rememberNavController()
     NavHost(navController, startDestination = "splash") {
+        composable("running/{uid}") { backStackEntry ->
+            val uid = backStackEntry.arguments?.getString("uid") ?: ""
+            RunningScreen(navController, uid)
+        }
+
+        composable("records/{uid}") { backStackEntry ->
+            val uid = backStackEntry.arguments?.getString("uid") ?: ""
+//            RunningRecordScreen(navController, uid)
+        }
         composable("splash") { SplashScreen(navController) }
         composable("login") { LoginScreen(navController) }
         composable(

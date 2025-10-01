@@ -2,7 +2,9 @@
 package kr.co.dongnae.runner.screen
 
 import android.app.Activity
+import android.widget.Button
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,6 +40,12 @@ fun RunScreen(
             navController.navigate("login") {
                 popUpTo("run/$uid") { inclusive = true }
             }
+        },
+        onRunningStart = {
+            navController.navigate("running/$uid")
+        },
+        onRunningRecord = {
+
         }
     )
 }
@@ -45,7 +53,9 @@ fun RunScreen(
 @Composable
 fun RunContent(
     user: FirestoreUser?,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onRunningStart: () -> Unit,
+    onRunningRecord: () -> Unit
 ) {
     if (user == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -65,9 +75,32 @@ fun RunContent(
             Text("이메일: ${user.email}", fontWeight = FontWeight.Medium)
             Text("지역: ${user.region}", fontWeight = FontWeight.Medium)
             Spacer(modifier = Modifier.height(32.dp))
-            Button(onClick = onLogout) {
-                Text("로그아웃")
+            Column (
+                modifier = Modifier.padding(5.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Row (
+                    modifier = Modifier.padding(5.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(onClick = onRunningStart,
+                        Modifier.padding(5.dp)) {
+                        Text("러닝 시작")
+                    }
+                    Button(onClick = onRunningRecord,
+                        Modifier.padding(5.dp)) {
+                        Text("러닝 기록")
+                    }
+                }
+
+                Button(onClick = onLogout,
+                    Modifier.padding(10.dp)) {
+                    Text("로그아웃")
+                }
             }
+
         }
     }
 }
@@ -85,6 +118,8 @@ fun RunScreenPreview() {
     )
     RunContent(
         user = fakeUser,
-        onLogout = {}
+        onLogout = {},
+        onRunningStart = {},
+        onRunningRecord = {},
     )
 }
