@@ -16,8 +16,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import android.util.Log // Log import 추가
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.maps.android.PolyUtil
 
 class RunningViewModel(application: Application) : AndroidViewModel(application) {
+    private var startTimestamp: Timestamp? = null
+    private var endTimestamp: Timestamp? = null
+
     private val fusedLocationClient: FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(application)
 
@@ -111,6 +117,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         if (_isRunning.value) return
         _isRunning.value = true
         _isPaused.value = false
+        startTimestamp = Timestamp.now()
         startTimer()
         startLocationUpdates()
     }
@@ -129,18 +136,6 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         startTimer()
         startLocationUpdates()
     }
-
-    fun stopRunning() {
-        _isRunning.value = false
-        _isPaused.value = false
-        stopTimer()
-        stopLocationUpdates()
-        _elapsedTime.value = 0
-        _routePoints.value = emptyList()
-        _distanceKm.value = 0.0
-        _pace.value = "--'--"
-    }
-
     private fun startTimer() {
         timerJob?.cancel()
         timerJob = viewModelScope.launch {
@@ -205,6 +200,60 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
             fusedLocationClient.removeLocationUpdates(it)
         }
         locationCallback = null
+    }
+
+    private fun encodePolyline(points: List<LatLng>): String {
+        return if (points.isEmpty()) "" else PolyUtil.encode(points)
+    }
+
+    /** 저장까지 포함해서 종료하고 싶을 때 사용하는 버전 */
+    fun stopRunningAndSave(uid: String, region: String, avgHeartRate: Int?) {
+        _isRunning.value = false
+        _isPaused.value = false
+        stopTimer()
+
+        val pointsBackup = _routePoints.value.toList()
+        val elapsedBackup = _elapsedTime.value
+        val distanceBackup = _distanceKm.value
+        val paceBackup = _pace.value
+        val startBackup = startTimestamp
+
+        _isRunning.value = false
+        _isPaused.value = false
+        stopTimer()
+
+        // 저장
+        val endTs = Timestamp.now()
+        val polyline = encodePolyline(pointsBackup)
+        val paceMinPerKm: Double? =
+            if (distanceBackup > 0.01 && elapsedBackup > 0)
+                (elapsedBackup / 60.0) / distanceBackup else null
+
+        val data = hashMapOf(
+            "user_id" to uid,
+            "region" to region,
+            "start_time" to (startBackup ?: endTs),
+            "end_time" to endTs,
+            "duration_min" to (elapsedBackup / 60.0),
+            "distance_km" to distanceBackup,
+            "pace_per_km" to (paceMinPerKm ?: 0.0),
+            "pace_display" to paceBackup,
+            "heartbeat" to avgHeartRate,
+            "routes_polyline" to polyline
+        )
+
+        FirebaseFirestore.getInstance()
+            .collection("runRecord")
+            .add(data)
+            .addOnSuccessListener { Log.d("RunningVM", "러닝 기록 저장 완료") }
+            .addOnFailureListener { e -> Log.e("RunningVM", "러닝 기록 저장 실패", e) }
+
+        // 마지막에 상태 초기화
+        endTimestamp = Timestamp.now()
+        _elapsedTime.value = 0
+        _routePoints.value = emptyList()
+        _distanceKm.value = 0.0
+        _pace.value = "--'--"
     }
 }
 

@@ -16,9 +16,11 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
+import kr.co.dongnae.runner.model.FirestoreUser
 import kr.co.dongnae.runner.viewModel.RunningViewModel
 
 
@@ -38,6 +40,44 @@ fun RunningScreen(
     val distanceKm by viewModel.distanceKm.collectAsState()
     val pace by viewModel.pace.collectAsState()
 
+    var user by remember { mutableStateOf<FirestoreUser?>(null) }
+    var isLoadingUser by remember { mutableStateOf(true) }
+
+    // Firestore에서 유저 정보 로드
+    LaunchedEffect(uid) {
+        FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(uid)
+            .get()
+            .addOnSuccessListener { doc ->
+                if (doc.exists()) {
+                    user = doc.toObject(FirestoreUser::class.java)
+                }
+                isLoadingUser = false
+            }
+            .addOnFailureListener {
+                isLoadingUser = false
+            }
+    }
+
+    if (isLoadingUser) {
+        // 유저 정보 로딩 중
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    if (user == null) {
+        // 유저 정보가 없을 경우
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("사용자 정보를 불러오지 못했습니다.")
+        }
+        return
+    }
+
+
+
     RunningContent(
         isRunning = isRunning,
         isPaused = isPaused,
@@ -49,7 +89,7 @@ fun RunningScreen(
         onPause = { viewModel.pauseRunning() },
         onResume = { viewModel.resumeRunning() },
         onStop = {
-            viewModel.stopRunning()
+            viewModel.stopRunningAndSave(user!!.uid, user!!.region, null)
         }
     )
 }
