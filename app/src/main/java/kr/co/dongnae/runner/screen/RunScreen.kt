@@ -15,6 +15,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.google.firebase.Timestamp
 import kr.co.dongnae.runner.model.FirestoreUser
 import kr.co.dongnae.runner.viewModel.RunViewModel
@@ -38,14 +39,16 @@ fun RunScreen(
         onLogout = {
             viewModel.logout(activity)
             navController.navigate("login") {
-                popUpTo("run/$uid") { inclusive = true }
+                popUpTo(0) { inclusive = true }
+                launchSingleTop = true
+                restoreState = false
             }
         },
         onRunningStart = {
             navController.navigate("running/$uid")
         },
         onRunningRecord = {
-
+            navController.navigate("records/$uid")
         }
     )
 }
