@@ -89,7 +89,7 @@ class RunningService : Service() {
         timerJob = null
         stopLocationUpdates()
         // TrackingManager.stopAndReset() 호출은 ViewModel에서 데이터 저장 후 진행할 수도 있음.
-        // 여기서는 서비스 종료 명령만 수행.
+        // 여기서는 서비스 종료 명령만 수행
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf() // 서비스 종료
     }
@@ -103,7 +103,7 @@ class RunningService : Service() {
                 timeSeconds++
                 TrackingManager.updateTime(timeSeconds)
 
-                // 페이스 업데이트 로직: 서비스에서 직접 계산하여 TrackingManager 업데이트
+                // 페이스 업데이트 로직 - 서비스에서 직접 계산하여 TrackingManager 업데이트
                 val distance = TrackingManager.distanceKm.value
                 val paceStr = calculatePace(timeSeconds, distance)
                 TrackingManager.updatePace(paceStr)
@@ -122,20 +122,21 @@ class RunningService : Service() {
         }
 
         // GPS 정확도(Accuracy) 임계값 설정 (미터)
-        // 15미터 이상 부정확한 위치는 오차로 간주하고 무시합니다.
-        val ACCURACY_THRESHOLD_METERS = 15f
+        // 30미터 이상 부정확한 위치는 오차로 간주하고 무시
+        val ACCURACY_THRESHOLD_METERS = 30f
 
-        // 거리 이동 임계값 설정 (킬로미터)
-        // 2미터(0.002km) 이하의 이동은 GPS 오차로 간주하고 무시합니다.
-        // 왕복 등 짧은 움직임도 기록되도록 기존 5m에서 2m로 완화했습니다.
-        val DISTANCE_THRESHOLD_KM = 0.00
+        // 거리 이동 임계값 설정 (미터)
+        // 1미터 이하의 이동은 GPS 오차로 간주하고 무시
+        // 민감도를 높여 작은 움직임도 기록하도록 조정
+        val DISTANCE_THRESHOLD_METERS = 1.0
+        val DISTANCE_THRESHOLD_KM = DISTANCE_THRESHOLD_METERS / 1000.0
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val lastLocation = result.lastLocation
 
-                // 1. 위치 데이터가 유효하고, 정확도가 충분히 높을 때만 처리
-                if (lastLocation != null && lastLocation.accuracy < ACCURACY_THRESHOLD_METERS) {
+                // 1. 위치 데이터가 유효할 때만 처리
+                if (lastLocation != null) {
 
                     val newPoint = LatLng(lastLocation.latitude, lastLocation.longitude)
                     val oldPoints = TrackingManager.routePoints.value
@@ -150,15 +151,16 @@ class RunningService : Service() {
                             newPoint.latitude, newPoint.longitude
                         )
 
-                        // 2. 이동 거리가 임계값 이상일 때만 누적 거리에 추가
-                        if (distance >= DISTANCE_THRESHOLD_KM) {
+                        // 2. GPS 정확도가 높고, 이동 거리가 임계값 이상일 때만 누적 거리 추가
+                        // 정확도가 낮거나 이동 거리가 너무 작으면 위치 무시
+                        if (lastLocation.accuracy < ACCURACY_THRESHOLD_METERS && distance >= DISTANCE_THRESHOLD_KM) {
                             newTotalDistance += distance
 
                             // TrackingManager 업데이트
                             TrackingManager.updateDistance(newTotalDistance)
                             TrackingManager.updateRoute(oldPoints + newPoint)
                         }
-                        // 이동 거리가 임계값 미만이거나, GPS 정확도가 낮으면 위치를 무시 (거리 누적 안함)
+                        // 정확도가 낮거나 이동 거리가 임계값 미만인 경우 위치 무시
 
                     } else {
                         // 경로의 첫 번째 포인트는 무조건 추가
@@ -201,7 +203,7 @@ class RunningService : Service() {
     private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val R = 6371 // 지구 반경 (킬로미터)
         val latDistance = Math.toRadians(lat2 - lat1)
-        val lonDistance = Math.toRadians(lon2 - lon2)
+        val lonDistance = Math.toRadians(lon2 - lon1)
         val a = sin(latDistance / 2) * sin(latDistance / 2) +
                 cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
                 sin(lonDistance / 2) * sin(lonDistance / 2)
