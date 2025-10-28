@@ -22,7 +22,7 @@ import kotlin.math.sqrt
 
 class RunningService : Service() {
 
-    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
+    private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var timerJob: Job? = null
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
