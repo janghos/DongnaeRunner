@@ -99,7 +99,7 @@ class RunningService : Service() {
         timerJob = serviceScope.launch {
             var timeSeconds = TrackingManager.elapsedTime.value
             while (TrackingManager.isTracking.value && !TrackingManager.isPaused.value) {
-                kotlinx.coroutines.delay(1000)
+                delay(1000)
                 timeSeconds++
                 TrackingManager.updateTime(timeSeconds)
 
@@ -156,9 +156,11 @@ class RunningService : Service() {
                         if (lastLocation.accuracy < ACCURACY_THRESHOLD_METERS && distance >= DISTANCE_THRESHOLD_KM) {
                             newTotalDistance += distance
 
-                            // TrackingManager 업데이트
                             TrackingManager.updateDistance(newTotalDistance)
                             TrackingManager.updateRoute(oldPoints + newPoint)
+
+                            val newPace = calculatePace(TrackingManager.elapsedTime.value, newTotalDistance)
+                            TrackingManager.updatePace(newPace)
                         }
                         // 정확도가 낮거나 이동 거리가 임계값 미만인 경우 위치 무시
 
@@ -212,8 +214,10 @@ class RunningService : Service() {
     }
 
     private fun calculatePace(totalSeconds: Int, totalDistanceKm: Double): String {
-        if (totalDistanceKm <= 0.01) return "--'--"
-        val paceSecondsPerKm = totalSeconds / totalDistanceKm
+        if (totalDistanceKm < 0.01) return "--'--" // 최소 거리 이하 무시
+        // 1km당 걸린 초 (float precision 보정)
+        val paceSecondsPerKm = totalSeconds.toDouble() / totalDistanceKm
+        // 시간 계산
         val minutes = (paceSecondsPerKm / 60).toInt()
         val seconds = (paceSecondsPerKm % 60).toInt()
         return String.format("%d'%02d''", minutes, seconds)
