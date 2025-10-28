@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import androidx.navigation.NavController
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
@@ -39,11 +40,20 @@ fun RunningRecordScreen(
             .get()
             .addOnSuccessListener { qs ->
                 items = qs.documents.map { d ->
-                    RunListItem(
+                    val startTime = d.getTimestamp("start_time")!!.toDate()!!.time
+                    val endTime = d.getTimestamp("end_time")!!.toDate()!!.time
+                    val diff = endTime - startTime
+                    val totalSeconds = diff/1000
+                    val hours = totalSeconds / 3600
+                    val minutes = (totalSeconds % 3600) / 60
+                    val seconds = totalSeconds % 60
+
+                        RunListItem(
                         id = d.id,
                         startTime = d.getTimestamp("start_time"),
                         distanceKm = (d.getDouble("distance_km") ?: 0.0),
-                        paceDisplay = (d.getString("pace_display") ?: "--'--")
+                        paceDisplay = (d.getString("pace_display") ?: "--'--"),
+                        runningTime = String.format("%d시간 %d분 %d초", hours, minutes, seconds)
                     )
                 }
                 loading = false
@@ -76,7 +86,13 @@ private fun RunListRow(item: RunListItem, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Column {
-            Text(dateText, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+
+            Row(modifier = Modifier
+            ){
+                Text(dateText + "  /  ", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text(item.runningTime, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+            }
+
             Text(
                 text = "거리 ${String.format(Locale.getDefault(), "%.2f", item.distanceKm)} km",
                 style = MaterialTheme.typography.bodySmall
@@ -171,13 +187,15 @@ fun RunningRecordWithDataPreview() {
             id = "run_001",
             startTime = Timestamp(Date()),
             distanceKm = 5.24,
-            paceDisplay = "5'12\""
+            paceDisplay = "5'12\"",
+            runningTime = "1시간 50분 23초"
         ),
         RunListItem(
             id = "run_002",
             startTime = Timestamp(Date(System.currentTimeMillis() - 86_400_000L)),
             distanceKm = 10.03,
-            paceDisplay = "4'58\""
+            paceDisplay = "4'58\"",
+            runningTime = "1시간 50분 23초"
         )
     )
     RunningRecordContent(

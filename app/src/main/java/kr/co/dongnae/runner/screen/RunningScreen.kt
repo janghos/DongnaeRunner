@@ -189,7 +189,7 @@ fun RunningContent(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Text("GPS 위치를 불러오는 중...")
+                Text("시작 버튼을 누르면 기록됩니다!")
             }
         }
 

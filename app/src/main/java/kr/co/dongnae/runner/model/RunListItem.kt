@@ -7,5 +7,6 @@ data class RunListItem(
     val id: String,
     val startTime: Timestamp?,
     val distanceKm: Double,
-    val paceDisplay: String
+    val paceDisplay: String,
+    val runningTime : String
 )
