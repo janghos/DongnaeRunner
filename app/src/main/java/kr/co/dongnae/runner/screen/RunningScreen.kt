@@ -9,6 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -20,8 +21,12 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kr.co.dongnae.runner.model.FirestoreUser
 import kr.co.dongnae.runner.viewModel.RunningViewModel
+import java.util.logging.Handler
 
 
 // ViewModel과 Navigation 로직을 담당하는 상위 컴포저블
@@ -42,7 +47,7 @@ fun RunningScreen(
 
     var user by remember { mutableStateOf<FirestoreUser?>(null) }
     var isLoadingUser by remember { mutableStateOf(true) }
-
+    val coroutineScope = rememberCoroutineScope()
     // Firestore에서 유저 정보 로드
     LaunchedEffect(uid) {
         FirebaseFirestore.getInstance()
@@ -76,8 +81,6 @@ fun RunningScreen(
         return
     }
 
-
-
     RunningContent(
         isRunning = isRunning,
         isPaused = isPaused,
@@ -85,7 +88,11 @@ fun RunningScreen(
         routePoints = routePoints,
         distanceKm = distanceKm, // 전달
         pace = pace,             // 전달
-        onStart = { viewModel.startRunning() },
+        onStart =
+            {
+                viewModel.startRunning()
+
+            },
         onPause = { viewModel.pauseRunning() },
         onResume = { viewModel.resumeRunning() },
         onStop = {
@@ -109,6 +116,7 @@ fun RunningContent(
     onStop: () -> Unit,
 ) {
     val cameraPositionState = rememberCameraPositionState()
+    val coroutineScope = rememberCoroutineScope()
 
     // routePoints가 변경될 때마다 카메라 위치를 업데이트합니다.
     LaunchedEffect(routePoints) {
@@ -118,6 +126,20 @@ fun RunningContent(
             )
         }
     }
+
+    var isCountingDown by remember { mutableStateOf(false) }
+    var countdownValue by remember { mutableStateOf(3) }
+    LaunchedEffect(isCountingDown) {
+        if(isCountingDown) {
+            for(i in 3 downTo 0) {
+                countdownValue = i
+                delay(1000)
+            }
+            isCountingDown = false
+            onStart()
+        }
+    }
+
 
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -189,7 +211,27 @@ fun RunningContent(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Text("시작 버튼을 누르면 기록됩니다!")
+                when {
+                    routePoints.isNotEmpty() && isRunning -> {}
+                    isCountingDown -> {
+                        Text(
+                            text = countdownValue.toString(),
+                            style = MaterialTheme.typography.displayLarge.copy(color = Color.Red)
+                        )
+                    }
+
+                    countdownValue == 0 -> {
+                        Text(
+                            "기록 측정이\n시작됩니다!",
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.displayLarge.copy(color = Color.Black)
+                        )
+                    }
+
+                    else -> {
+                        Text("시작 버튼을 누르면 기록됩니다!")
+                    }
+                }
             }
         }
 
@@ -207,12 +249,17 @@ fun RunningContent(
                     Text("재개")
                 }
             } else {
-                Button(onClick = onStart) {
+                Button(onClick = { isCountingDown = true }) {
                     Text("시작")
                 }
             }
 
-            Button(onClick = onStop) {
+            Button(onClick = {
+                coroutineScope.launch {
+                    countdownValue = 3
+                    onStop()
+                }
+            }) {
                 Text("종료")
             }
         }

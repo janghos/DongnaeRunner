@@ -8,13 +8,17 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.location.Location
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.*
+import kotlin.coroutines.resume
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -56,17 +60,31 @@ class RunningService : Service() {
     private fun startRunningForeground() {
         if (TrackingManager.isTracking.value) return
 
-        TrackingManager.startTracking()
-        startTimer()
-        startLocationUpdates()
+        // 🚀 먼저 GPS 안정화부터 기다림
+        serviceScope.launch {
+            val stableLoc = awaitStableLocation()
+            if (stableLoc == null) {
+                stopSelf()
+                return@launch
+            }
 
-        // 포그라운드 서비스 시작 (영구 알림 표시)
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("동네 러닝")
-            .setContentText("러닝을 기록 중입니다...")
-            .setSmallIcon(android.R.drawable.ic_menu_directions) // 아이콘은 적절히 변경하세요
-            .build()
-        startForeground(NOTIFICATION_ID, notification)
+            val firstPoint = LatLng(stableLoc.latitude, stableLoc.longitude)
+            TrackingManager.updateRoute(listOf(firstPoint))
+            TrackingManager.updateDistance(0.0)
+            TrackingManager.updatePace("--'--")
+
+            TrackingManager.startTracking()
+            startTimer()
+            startLocationUpdates()
+
+            // 포그라운드 서비스 시작 (영구 알림 표시)
+            val notification = NotificationCompat.Builder(this@RunningService, CHANNEL_ID)
+                .setContentTitle("동네 러닝")
+                .setContentText("러닝을 기록 중입니다...")
+                .setSmallIcon(android.R.drawable.ic_menu_directions)
+                .build()
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun pauseRunning() {
@@ -111,7 +129,10 @@ class RunningService : Service() {
         }
     }
 
-    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
+    @RequiresPermission(allOf = [
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    ])
     private fun startLocationUpdates() {
         if (locationCallback != null) return
 
@@ -121,57 +142,46 @@ class RunningService : Service() {
             priority = LocationRequest.PRIORITY_HIGH_ACCURACY
         }
 
-        // GPS 정확도(Accuracy) 임계값 설정 (미터)
-        // 30미터 이상 부정확한 위치는 오차로 간주하고 무시
-        val ACCURACY_THRESHOLD_METERS = 30f
-
-        // 거리 이동 임계값 설정 (미터)
-        // 1미터 이하의 이동은 GPS 오차로 간주하고 무시
-        // 민감도를 높여 작은 움직임도 기록하도록 조정
+        val ACCURACY_THRESHOLD_METERS = 15f
         val DISTANCE_THRESHOLD_METERS = 1.0
         val DISTANCE_THRESHOLD_KM = DISTANCE_THRESHOLD_METERS / 1000.0
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                val lastLocation = result.lastLocation
+                val lastLocation = result.lastLocation ?: return
+                val newPoint = LatLng(lastLocation.latitude, lastLocation.longitude)
+                val oldPoints = TrackingManager.routePoints.value
+                var newTotalDistance = TrackingManager.distanceKm.value
 
-                // 1. 위치 데이터가 유효할 때만 처리
-                if (lastLocation != null) {
+                if (oldPoints.isNotEmpty()) {
+                    val lastPoint = oldPoints.last()
+                    val distance = calculateDistance(
+                        lastPoint.latitude, lastPoint.longitude,
+                        newPoint.latitude, newPoint.longitude
+                    )
 
-                    val newPoint = LatLng(lastLocation.latitude, lastLocation.longitude)
-                    val oldPoints = TrackingManager.routePoints.value
-                    var newTotalDistance = TrackingManager.distanceKm.value
-
-                    if (oldPoints.isNotEmpty()) {
-                        val lastPoint = oldPoints.last()
-
-                        // 직전 위치와 새 위치 사이의 거리 계산 (단위: km)
-                        val distance = calculateDistance(
-                            lastPoint.latitude, lastPoint.longitude,
-                            newPoint.latitude, newPoint.longitude
-                        )
-
-                        // 2. GPS 정확도가 높고, 이동 거리가 임계값 이상일 때만 누적 거리 추가
-                        // 정확도가 낮거나 이동 거리가 너무 작으면 위치 무시
-                        if (lastLocation.accuracy < ACCURACY_THRESHOLD_METERS && distance >= DISTANCE_THRESHOLD_KM) {
-                            newTotalDistance += distance
-
-                            TrackingManager.updateDistance(newTotalDistance)
-                            TrackingManager.updateRoute(oldPoints + newPoint)
-
-                            val newPace = calculatePace(TrackingManager.elapsedTime.value, newTotalDistance)
-                            TrackingManager.updatePace(newPace)
-                        }
-                        // 정확도가 낮거나 이동 거리가 임계값 미만인 경우 위치 무시
-
-                    } else {
-                        // 경로의 첫 번째 포인트는 무조건 추가
+                    if (lastLocation.accuracy < ACCURACY_THRESHOLD_METERS &&
+                        distance >= DISTANCE_THRESHOLD_KM
+                    ) {
+                        newTotalDistance += distance
+                        TrackingManager.updateDistance(newTotalDistance)
                         TrackingManager.updateRoute(oldPoints + newPoint)
+                        val newPace = calculatePace(TrackingManager.elapsedTime.value, newTotalDistance)
+                        TrackingManager.updatePace(newPace)
                     }
+                } else {
+                    TrackingManager.updateRoute(oldPoints + newPoint)
                 }
             }
         }
-        fusedLocationClient.requestLocationUpdates(request, locationCallback!!, null)
+
+        Handler(Looper.getMainLooper()).post {
+            fusedLocationClient.requestLocationUpdates(
+                request,
+                locationCallback!!,
+                Looper.getMainLooper()
+            )
+        }
     }
 
     private fun stopLocationUpdates() {
@@ -221,5 +231,68 @@ class RunningService : Service() {
         val minutes = (paceSecondsPerKm / 60).toInt()
         val seconds = (paceSecondsPerKm % 60).toInt()
         return String.format("%d'%02d''", minutes, seconds)
+    }
+
+    @RequiresPermission(allOf = [
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION])
+    private suspend fun awaitStableLocation(
+        client: FusedLocationProviderClient = fusedLocationClient,
+        accuracyMeters: Float = 15f,
+        maxUpdates: Int = 6,
+        timeoutMs: Long = 8_000L
+    ): Location? {
+
+        return withTimeoutOrNull(timeoutMs) {
+            suspendCancellableCoroutine { cont ->
+                var resumed = false
+                var received = 0
+
+                // 최신 API (Builder) 우선, 구버전이면 create()로 대체
+                val request = try {
+                    LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, /* interval */ 1000L)
+                        .setMinUpdateIntervalMillis(500L)
+                        .setMaxUpdates(maxUpdates)
+                        .setWaitForAccurateLocation(true) // 가능한 정확한 첫 위치를 기다림
+                        .build()
+                } catch (_: Throwable) {
+                    @Suppress("DEPRECATION")
+                    LocationRequest.create().apply {
+                        interval = 1000L
+                        fastestInterval = 500L
+                        priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+                        @Suppress("DEPRECATION")
+                        numUpdates = maxUpdates
+                    }
+                }
+
+                val callback = object : LocationCallback() {
+                    override fun onLocationResult(result: LocationResult) {
+                        if (resumed) return
+                        val loc = result.lastLocation ?: return
+                        received++
+
+                        // 정확도 체크 (accuracy <= accuracyMeters)
+                        if (loc.accuracy <= accuracyMeters || received >= maxUpdates) {
+                            resumed = true
+                            client.removeLocationUpdates(this)
+                            cont.resume(loc)
+                        }
+                    }
+                }
+
+                // 콜백 등록 (반드시 메인 루퍼 지정)
+                client.requestLocationUpdates(
+                    request,
+                    callback,
+                    Looper.getMainLooper()
+                )
+
+                // 코루틴 취소 시 콜백 해제
+                cont.invokeOnCancellation {
+                    client.removeLocationUpdates(callback)
+                }
+            }
+        }
     }
 }
