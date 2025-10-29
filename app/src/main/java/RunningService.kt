@@ -18,6 +18,7 @@ import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.*
+import kotlinx.coroutines.tasks.await
 import kotlin.coroutines.resume
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -63,12 +64,16 @@ class RunningService : Service() {
         // 🚀 먼저 GPS 안정화부터 기다림
         serviceScope.launch {
             val stableLoc = awaitStableLocation()
-            if (stableLoc == null) {
-                stopSelf()
-                return@launch
+            val safeLoc = stableLoc ?: try {
+                fusedLocationClient.lastLocation.await() // get last known location
+            } catch (_: Exception) {
+                null
+            } ?: Location("fallback").apply {
+                latitude = 0.0
+                longitude = 0.0
             }
 
-            val firstPoint = LatLng(stableLoc.latitude, stableLoc.longitude)
+            val firstPoint = LatLng(safeLoc.latitude, safeLoc.longitude)
             TrackingManager.updateRoute(listOf(firstPoint))
             TrackingManager.updateDistance(0.0)
             TrackingManager.updatePace("--'--")
@@ -114,16 +119,15 @@ class RunningService : Service() {
 
     private fun startTimer() {
         timerJob?.cancel()
+        val startTime = System.currentTimeMillis()
         timerJob = serviceScope.launch {
-            var timeSeconds = TrackingManager.elapsedTime.value
             while (TrackingManager.isTracking.value && !TrackingManager.isPaused.value) {
                 delay(1000)
-                timeSeconds++
-                TrackingManager.updateTime(timeSeconds)
+                val elapsedSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
+                TrackingManager.updateTime(elapsedSeconds)
 
-                // 페이스 업데이트 로직 - 서비스에서 직접 계산하여 TrackingManager 업데이트
                 val distance = TrackingManager.distanceKm.value
-                val paceStr = calculatePace(timeSeconds, distance)
+                val paceStr = calculatePace(elapsedSeconds, distance)
                 TrackingManager.updatePace(paceStr)
             }
         }
