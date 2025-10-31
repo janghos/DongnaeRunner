@@ -28,6 +28,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kr.co.dongnae.runner.presentation.login.LoginScreen
 import kr.co.dongnae.runner.presentation.splash.SplashScreen
 import kr.co.dongnae.runner.screen.RunScreen
+import kr.co.dongnae.runner.screen.RunningRecordDetailScreen
 import kr.co.dongnae.runner.screen.RunningRecordScreen
 import kr.co.dongnae.runner.screen.RunningScreen
 
@@ -76,11 +77,6 @@ fun DongnaeRunnerApp() {
             RunningRecordScreen(navController = navController, uid = uid)
         }
 
-//        composable("recordDetail/{runId}") { backStackEntry ->
-//            val runId = backStackEntry.arguments?.getString("runId") ?: ""
-//            RunRecordDetailScreen(navController = navController, runId = runId)
-//        }
-
         composable("splash") { SplashScreen(navController) }
         composable("login") { LoginScreen(navController) }
         composable(
@@ -89,6 +85,10 @@ fun DongnaeRunnerApp() {
         ) { backStackEntry ->
             val uid = backStackEntry.arguments?.getString("uid") ?: ""
             RunScreen(navController, uid)
+        }
+        composable("recordDetail/{runId}") { backStackEntry ->
+            val runId = backStackEntry.arguments?.getString("runId") ?: return@composable
+            RunningRecordDetailScreen(navController = navController, runId = runId)
         }
     }
 }

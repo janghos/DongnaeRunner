@@ -2,6 +2,7 @@ package kr.co.dongnae.runner.screen
 
 import android.util.Log
 import android.util.Log.e
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -68,7 +69,9 @@ fun RunningRecordScreen(
         loading = loading,
         items = items,
         onBack = { navController.popBackStack() },
-        onClickItem = { item -> navController.navigate("recordDetail/${item.id}") }
+        onClickItem = { item ->
+            navController.navigate("recordDetail/${item.id}")
+        }
     )
 }
 
