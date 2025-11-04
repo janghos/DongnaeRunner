@@ -1,8 +1,11 @@
 package kr.co.dongnae.runner.service
 
+import TrackingManager.getDurationSeconds
 import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -22,6 +25,8 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kr.co.dongnae.runner.MainActivity
+import java.util.Locale
 
 class RunningService : Service() {
 
@@ -38,6 +43,7 @@ class RunningService : Service() {
     companion object {
         const val CHANNEL_ID = "RunningChannel"
         const val NOTIFICATION_ID = 1
+        const val ACTION_TOGGLE_PAUSE = "ACTION_TOGGLE_PAUSE"
     }
 
     override fun onBind(intent: Intent?): IBinder? = null // Unbound Service 사용
@@ -55,6 +61,13 @@ class RunningService : Service() {
             "ACTION_PAUSE_RUNNING" -> pauseRunning()
             "ACTION_RESUME_RUNNING" -> resumeRunning()
             "ACTION_STOP_RUNNING" -> stopRunning()
+            ACTION_TOGGLE_PAUSE -> {
+                if(TrackingManager.isPaused.value){
+                    resumeRunning()
+                }else {
+                    pauseRunning()
+                }
+            }
         }
         return START_STICKY // 서비스가 강제 종료돼도 다시 시작하도록
     }
@@ -63,7 +76,7 @@ class RunningService : Service() {
     private fun startRunningForeground() {
         if (TrackingManager.isTracking.value) return
 
-        // 🚀 먼저 GPS 안정화부터 기다림
+        // 먼저 GPS 안정화부터 기다림
         serviceScope.launch {
             val stableLoc = awaitStableLocation()
             val safeLoc = stableLoc ?: try {
@@ -88,14 +101,67 @@ class RunningService : Service() {
             startTimer()
             startLocationUpdates()
 
-            // 포그라운드 서비스 시작 (영구 알림 표시)
-            val notification = NotificationCompat.Builder(this@RunningService, CHANNEL_ID)
-                .setContentTitle("동네 러닝")
-                .setContentText("러닝을 기록 중입니다...")
-                .setSmallIcon(android.R.drawable.ic_menu_directions)
-                .build()
+            val notification = buildNotification()
+
             startForeground(NOTIFICATION_ID, notification)
+            updateNotification() // 타이머에서 주기적으로 호출됨
         }
+    }
+
+    private fun buildNotification(): Notification {
+        val duration = getDurationSeconds()
+        val pace = TrackingManager.pace.value
+        val distanceKm = TrackingManager.distanceKm.value
+
+        val minutes = duration / 60
+        val seconds = duration % 60
+        val timeStr = String.format("%02d:%02d", minutes, seconds)
+        val distanceStr = String.format(Locale.getDefault(), "%.2fkm", distanceKm)
+
+        // 메인 액티비티 이동 Intent
+        val activityIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingActivityIntent = PendingIntent.getActivity(
+            this,
+            0,
+            activityIntent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // 일시정지/재개 토글 액션 Intent
+        val toggleIntent = Intent(this, RunningService::class.java).apply {
+            action = ACTION_TOGGLE_PAUSE
+        }
+        // FLAG_UPDATE_CURRENT는 알림의 데이터를 업데이트
+        val togglePendingIntent = PendingIntent.getService(
+            this,
+            1, // requestCode 변경
+            toggleIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        // 현재 상태에 따른 버튼 텍스트
+        val isPaused = TrackingManager.isPaused.value
+        val actionText = if (isPaused) "재개" else "일시정지"
+        val actionIcon = if (isPaused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause
+
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("러닝 중: $timeStr ($distanceStr)")
+            .setContentText("페이스: $pace")
+            .setSmallIcon(android.R.drawable.ic_menu_directions)
+            .setContentIntent(pendingActivityIntent)
+            .setOngoing(true)
+            .addAction(actionIcon, actionText, togglePendingIntent)
+
+
+        return builder.build()
+    }
+
+    private fun updateNotification() {
+        val notification = buildNotification()
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
     private fun pauseRunning() {
@@ -103,6 +169,7 @@ class RunningService : Service() {
         TrackingManager.pauseTracking()
         timerJob?.cancel()
         stopLocationUpdates()
+        updateNotification()
         // 알림 업데이트 등 필요
     }
 
@@ -115,6 +182,7 @@ class RunningService : Service() {
         TrackingManager.resumeTracking()
         startTimer()
         startLocationUpdates()
+        updateNotification()
         // 알림 업데이트 등 필요
     }
 
@@ -139,6 +207,7 @@ class RunningService : Service() {
                 val distance = TrackingManager.distanceKm.value
                 val paceStr = calculatePace(elapsedSeconds, distance)
                 TrackingManager.updatePace(paceStr)
+                updateNotification()
             }
         }
     }
