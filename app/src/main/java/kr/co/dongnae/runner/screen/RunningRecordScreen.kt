@@ -41,15 +41,12 @@ fun RunningRecordScreen(
             .get()
             .addOnSuccessListener { qs ->
                 items = qs.documents.map { d ->
-                    val startTime = d.getTimestamp("start_time")!!.toDate()!!.time
-                    val endTime = d.getTimestamp("end_time")!!.toDate()!!.time
-                    val diff = endTime - startTime
-                    val totalSeconds = diff/1000
+                    val totalSeconds = d.getLong("duration_seconds") ?: 0L
                     val hours = totalSeconds / 3600
                     val minutes = (totalSeconds % 3600) / 60
                     val seconds = totalSeconds % 60
 
-                        RunListItem(
+                    RunListItem(
                         id = d.id,
                         startTime = d.getTimestamp("start_time"),
                         distanceKm = (d.getDouble("distance_km") ?: 0.0),

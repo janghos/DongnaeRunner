@@ -1,5 +1,3 @@
-// kr.co.dongnae.runner.service/RunningService.kt
-
 package kr.co.dongnae.runner.service
 
 import android.Manifest
@@ -32,6 +30,10 @@ class RunningService : Service() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var locationCallback: LocationCallback? = null
+
+    private var runStartTime = 0L
+    private var totalPausedTime = 0L
+    private var lastPauseStart: Long? = null
 
     companion object {
         const val CHANNEL_ID = "RunningChannel"
@@ -78,6 +80,10 @@ class RunningService : Service() {
             TrackingManager.updateDistance(0.0)
             TrackingManager.updatePace("--'--")
 
+            runStartTime = System.currentTimeMillis()
+            totalPausedTime = 0L
+            lastPauseStart = null
+
             TrackingManager.startTracking()
             startTimer()
             startLocationUpdates()
@@ -93,6 +99,7 @@ class RunningService : Service() {
     }
 
     private fun pauseRunning() {
+        lastPauseStart = System.currentTimeMillis()
         TrackingManager.pauseTracking()
         timerJob?.cancel()
         stopLocationUpdates()
@@ -101,6 +108,10 @@ class RunningService : Service() {
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     private fun resumeRunning() {
+        lastPauseStart?.let {
+            totalPausedTime += System.currentTimeMillis() - it
+            lastPauseStart = null
+        }
         TrackingManager.resumeTracking()
         startTimer()
         startLocationUpdates()
@@ -119,11 +130,10 @@ class RunningService : Service() {
 
     private fun startTimer() {
         timerJob?.cancel()
-        val startTime = System.currentTimeMillis()
         timerJob = serviceScope.launch {
             while (TrackingManager.isTracking.value && !TrackingManager.isPaused.value) {
                 delay(1000)
-                val elapsedSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
+                val elapsedSeconds = TrackingManager.getDurationSeconds()
                 TrackingManager.updateTime(elapsedSeconds)
 
                 val distance = TrackingManager.distanceKm.value

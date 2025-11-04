@@ -35,6 +35,11 @@ object TrackingManager {
     var startTimestamp: com.google.firebase.Timestamp? = null
     var endTimestamp: com.google.firebase.Timestamp? = null
 
+    private var pauseStartMillis: Long? = null
+
+    // 8. 일시정지된 시간 누적 (millis)
+    var pauseDurationMillis: Long = 0
+
 
     // 상태 업데이트 함수 (주로 Service에서 호출)
     fun startTracking() {
@@ -45,10 +50,16 @@ object TrackingManager {
 
     fun pauseTracking() {
         _isPaused.value = true
+        pauseStartMillis = System.currentTimeMillis()
     }
 
     fun resumeTracking() {
         _isPaused.value = false
+        val now = System.currentTimeMillis()
+        if (pauseStartMillis != null) {
+            pauseDurationMillis += (now - pauseStartMillis!!)
+            pauseStartMillis = null
+        }
     }
 
     fun stopAndReset() {
@@ -62,6 +73,8 @@ object TrackingManager {
         _pace.value = "--'--"
         startTimestamp = null
         endTimestamp = null
+        pauseDurationMillis = 0
+        pauseStartMillis = null
     }
 
     fun updateTime(seconds: Int) {
@@ -78,5 +91,12 @@ object TrackingManager {
 
     fun updatePace(paceStr: String) {
         _pace.value = paceStr
+    }
+
+    fun getDurationSeconds(): Int {
+        val start = startTimestamp?.toDate()?.time ?: return 0
+        val end = endTimestamp?.toDate()?.time ?: System.currentTimeMillis()
+        val duration = end - start - pauseDurationMillis
+        return maxOf(0, (duration / 1000).toInt())
     }
 }

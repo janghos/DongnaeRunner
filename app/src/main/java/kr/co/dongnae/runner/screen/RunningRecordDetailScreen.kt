@@ -41,10 +41,7 @@ fun RunningRecordDetailScreen(
     LaunchedEffect(runId) {
         db.collection("runRecord").document(runId).get()
             .addOnSuccessListener { d ->
-                val start = d.getTimestamp("start_time")?.toDate()?.time ?: 0L
-                val end = d.getTimestamp("end_time")?.toDate()?.time ?: 0L
-                val diff = end - start
-                val totalSeconds = diff / 1000
+                val totalSeconds = d.getLong("duration_seconds")?.toInt() ?: 0
                 val hours = totalSeconds / 3600
                 val minutes = (totalSeconds % 3600) / 60
                 val seconds = totalSeconds % 60

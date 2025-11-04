@@ -73,6 +73,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         val distanceBackup = TrackingManager.distanceKm.value
         val paceBackup = TrackingManager.pace.value
         val startBackup = TrackingManager.startTimestamp
+        val pauseMillisBackup = TrackingManager.pauseDurationMillis
         val endTs = com.google.firebase.Timestamp.now()
 
         // 2. 서비스 종료 명령 전송
@@ -81,27 +82,27 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         }
         getApplication<Application>().startService(intent)
 
-        // 3. TrackingManager 상태 초기화 (데이터 저장 후)
-        TrackingManager.stopAndReset() // 이 부분이 중요: 모든 StateFlow 초기화
-
-        // 4. 데이터 저장 로직 (기존과 동일)
+        // 3. 데이터 저장 로직 (기존과 동일)
         val polyline = encodePolyline(pointsBackup)
         val paceMinPerKm: Double? =
             if (distanceBackup > 0.01 && elapsedBackup > 0)
-                (elapsedBackup / 60.0) / distanceBackup else null
+                ((elapsedBackup - pauseMillisBackup / 1000.0) / 60.0) / distanceBackup else null
 
         val data = hashMapOf(
             "user_id" to uid,
             "region" to region,
             "start_time" to (startBackup ?: endTs),
             "end_time" to endTs,
-            "duration_min" to (elapsedBackup / 60.0),
+            "duration_seconds" to TrackingManager.getDurationSeconds(),
             "distance_km" to distanceBackup,
             "pace_per_km" to (paceMinPerKm ?: 0.0),
             "pace_display" to paceBackup,
             "heartbeat" to avgHeartRate,
             "routes_polyline" to polyline
         )
+
+        // 4. TrackingManager 상태 초기화 (데이터 저장 후)
+        TrackingManager.stopAndReset() // 이 부분이 중요: 모든 StateFlow 초기화
 
         FirebaseFirestore.getInstance()
             .collection("runRecord")
