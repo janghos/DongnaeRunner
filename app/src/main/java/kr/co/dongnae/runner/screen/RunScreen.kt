@@ -2,20 +2,34 @@
 package kr.co.dongnae.runner.screen
 
 import android.app.Activity
-import android.widget.Button
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.google.firebase.Timestamp
 import kr.co.dongnae.runner.model.FirestoreUser
 import kr.co.dongnae.runner.viewModel.RunViewModel
@@ -60,51 +74,112 @@ fun RunContent(
     onRunningStart: () -> Unit,
     onRunningRecord: () -> Unit
 ) {
-    if (user == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-    } else {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text("🏃 러닝 기록 화면", style = MaterialTheme.typography.headlineSmall)
-            Spacer(modifier = Modifier.height(24.dp))
-            Text("이름: ${user.name}", fontWeight = FontWeight.Medium)
-            Text("이메일: ${user.email}", fontWeight = FontWeight.Medium)
-            Text("지역: ${user.region}", fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.height(32.dp))
-            Column (
-                modifier = Modifier.padding(5.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+    val colorScheme = MaterialTheme.colorScheme
+    val gradient = remember(colorScheme) {
+        Brush.verticalGradient(
+            colors = listOf(
+                colorScheme.background,
+                colorScheme.surfaceVariant,
+                colorScheme.background
+            )
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(gradient)
+            .padding(horizontal = 24.dp, vertical = 24.dp)
+    ) {
+        if (user == null) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = colorScheme.primary)
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Row (
-                    modifier = Modifier.padding(5.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Welcome back",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = user.name,
+                        style = MaterialTheme.typography.displayMedium,
+                        color = colorScheme.secondary
+                    )
+                    Text(
+                        text = "오늘도 달려볼까요?",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = colorScheme.onBackground,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(32.dp),
+                    color = colorScheme.surfaceVariant,
+                    tonalElevation = 8.dp
                 ) {
-                    Button(onClick = onRunningStart,
-                        Modifier.padding(5.dp)) {
-                        Text("러닝 시작")
-                    }
-                    Button(onClick = onRunningRecord,
-                        Modifier.padding(5.dp)) {
-                        Text("러닝 기록")
+                    Column(
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        InfoRow(label = "이메일", value = user.email)
+                        InfoRow(label = "활동 지역", value = user.region)
+                        user.last_login?.let {
+                            InfoRow(label = "마지막 로그인", value = it.toDate().toString())
+                        }
                     }
                 }
 
-                Button(onClick = onLogout,
-                    Modifier.padding(10.dp)) {
-                    Text("로그아웃")
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(28.dp),
+                    color = colorScheme.surfaceVariant,
+                    tonalElevation = 6.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "러닝 메뉴",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = colorScheme.onBackground
+                        )
+                        RunnerButton(text = "러닝 시작", onClick = onRunningStart)
+                        RunnerButton(text = "러닝 기록", onClick = onRunningRecord)
+                        RunnerButton(text = "로그아웃", onClick = onLogout)
+                    }
                 }
             }
-
         }
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground
+        )
     }
 }
 

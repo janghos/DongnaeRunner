@@ -9,8 +9,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -31,6 +32,7 @@ import kr.co.dongnae.runner.screen.RunScreen
 import kr.co.dongnae.runner.screen.RunningRecordDetailScreen
 import kr.co.dongnae.runner.screen.RunningRecordScreen
 import kr.co.dongnae.runner.screen.RunningScreen
+import kr.co.dongnae.runner.ui.theme.DongneRunnerTheme
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -65,30 +67,36 @@ fun DongnaeRunnerApp() {
         }
     }
 
-    NavHost(navController, startDestination = "splash") {
-        composable("running/{uid}") { backStackEntry ->
-            val uid = backStackEntry.arguments?.getString("uid") ?: ""
-            RunningScreen(navController, uid)
-        }
+    DongneRunnerTheme {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            NavHost(navController, startDestination = "splash") {
+                composable("running/{uid}") { backStackEntry ->
+                    val uid = backStackEntry.arguments?.getString("uid") ?: ""
+                    RunningScreen(navController, uid)
+                }
 
-        // NavGraph.kt 등
-        composable("records/{uid}") { backStackEntry ->
-            val uid = backStackEntry.arguments?.getString("uid") ?: ""
-            RunningRecordScreen(navController = navController, uid = uid)
-        }
+                composable("records/{uid}") { backStackEntry ->
+                    val uid = backStackEntry.arguments?.getString("uid") ?: ""
+                    RunningRecordScreen(navController = navController, uid = uid)
+                }
 
-        composable("splash") { SplashScreen(navController) }
-        composable("login") { LoginScreen(navController) }
-        composable(
-            route = "run/{uid}",
-            arguments = listOf(navArgument("uid") { defaultValue = "" })
-        ) { backStackEntry ->
-            val uid = backStackEntry.arguments?.getString("uid") ?: ""
-            RunScreen(navController, uid)
-        }
-        composable("recordDetail/{runId}") { backStackEntry ->
-            val runId = backStackEntry.arguments?.getString("runId") ?: return@composable
-            RunningRecordDetailScreen(navController = navController, runId = runId)
+                composable("splash") { SplashScreen(navController) }
+                composable("login") { LoginScreen(navController) }
+                composable(
+                    route = "run/{uid}",
+                    arguments = listOf(navArgument("uid") { defaultValue = "" })
+                ) { backStackEntry ->
+                    val uid = backStackEntry.arguments?.getString("uid") ?: ""
+                    RunScreen(navController, uid)
+                }
+                composable("recordDetail/{runId}") { backStackEntry ->
+                    val runId = backStackEntry.arguments?.getString("runId") ?: return@composable
+                    RunningRecordDetailScreen(navController = navController, runId = runId)
+                }
+            }
         }
     }
 }

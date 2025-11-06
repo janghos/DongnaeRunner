@@ -1,31 +1,43 @@
 package kr.co.dongnae.runner.screen
 
-import android.annotation.SuppressLint
 import android.util.Log
-import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
-import com.google.firebase.annotations.concurrent.Background
+import com.google.android.gms.maps.model.LatLngBounds
 import com.google.maps.android.PolyUtil
 import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.firebase.firestore.FirebaseFirestore
 import kr.co.dongnae.runner.model.RunListItem
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Locale
 
-@SuppressLint("SimpleDateFormat")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RunningRecordDetailScreen(
@@ -37,8 +49,11 @@ fun RunningRecordDetailScreen(
     var runItem by remember { mutableStateOf<RunListItem?>(null) }
     var routePoints by remember { mutableStateOf<List<LatLng>>(emptyList()) }
     val cameraPositionState = rememberCameraPositionState()
+    val scrollState = rememberScrollState()
+    val dateFormatter = remember { SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.getDefault()) }
 
     LaunchedEffect(runId) {
+        loading = true
         db.collection("runRecord").document(runId).get()
             .addOnSuccessListener { d ->
                 val totalSeconds = d.getLong("duration_seconds")?.toInt() ?: 0
@@ -65,67 +80,241 @@ fun RunningRecordDetailScreen(
             }
     }
 
+    LaunchedEffect(routePoints) {
+        if (routePoints.isNotEmpty()) {
+            runCatching {
+                val boundsBuilder = LatLngBounds.builder()
+                routePoints.forEach(boundsBuilder::include)
+                val bounds = boundsBuilder.build()
+                cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(bounds, 120))
+            }.onFailure {
+                cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(routePoints.first(), 15f))
+            }
+        }
+    }
+
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("러닝 상세 기록") },
+                title = {
+                    Text(
+                        text = "러닝 기록",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로")
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "뒤로",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.3f),
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
+                )
             )
         }
     ) { padding ->
-        if (loading) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-        } else if (runItem == null) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("기록이 존재하지 않습니다.")
-            }
-        } else {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
-            ) {
-                Text("시작 시간: " + SimpleDateFormat("yyyy.MM.dd HH:mm").format(runItem!!.startTime?.toDate() ?: Date()))
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("러닝 시간: ${runItem!!.runningTime}")
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("이동 거리: ${String.format("%.2f", runItem!!.distanceKm)} km")
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("페이스: ${runItem!!.paceDisplay}")
-                Spacer(modifier = Modifier.height(16.dp))
+        val colorScheme = MaterialTheme.colorScheme
+        val gradient = remember(colorScheme) {
+            Brush.verticalGradient(
+                colors = listOf(
+                    colorScheme.background,
+                    colorScheme.surfaceVariant,
+                    colorScheme.background
+                )
+            )
+        }
 
-                if (routePoints.isNotEmpty()) {
-                    GoogleMap(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(300.dp),
-                        cameraPositionState = cameraPositionState
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(gradient)
+                .padding(padding)
+        ) {
+            when {
+                loading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Polyline(points = routePoints, color = Color.Red, width = 6f)
+                        CircularProgressIndicator(color = colorScheme.primary)
                     }
+                }
 
-                    LaunchedEffect(routePoints) {
-                        cameraPositionState.move(CameraUpdateFactory.newLatLngZoom(routePoints.first(), 16f))
+                runItem == null -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "기록이 존재하지 않습니다.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                else -> {
+                    val run = runItem!!
+                    val formattedStart = run.startTime?.toDate()?.let(dateFormatter::format) ?: "기록 시간 정보 없음"
+                    val distanceLabel = String.format(Locale.getDefault(), "%.2f", run.distanceKm)
+                    val distanceMeters = String.format(Locale.getDefault(), "%.0f m", run.distanceKm * 1000)
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState)
+                            .padding(horizontal = 24.dp, vertical = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(24.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "총 이동 거리",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = distanceLabel,
+                                style = MaterialTheme.typography.displayMedium,
+                                color = colorScheme.secondary
+                            )
+                            Text(
+                                text = "킬로미터",
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = colorScheme.onBackground
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            StatTile(
+                                label = "러닝 시간",
+                                value = run.runningTime,
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatTile(
+                                label = "평균 페이스",
+                                value = run.paceDisplay,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(280.dp),
+                            shape = RoundedCornerShape(28.dp),
+                            color = colorScheme.surfaceVariant,
+                            tonalElevation = 10.dp
+                        ) {
+                            if (routePoints.isNotEmpty()) {
+                                GoogleMap(
+                                    modifier = Modifier.fillMaxSize(),
+                                    cameraPositionState = cameraPositionState,
+                                    uiSettings = MapUiSettings(zoomControlsEnabled = false, compassEnabled = false)
+                                ) {
+                                    Polyline(
+                                        points = routePoints,
+                                        color = colorScheme.secondary,
+                                        width = 8f
+                                    )
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "기록된 경로가 없습니다.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            color = colorScheme.surfaceVariant,
+                            tonalElevation = 6.dp
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                InfoRow(label = "시작 시각", value = formattedStart)
+                                Divider(color = colorScheme.outline.copy(alpha = 0.4f))
+                                InfoRow(label = "총 거리", value = "$distanceLabel km ($distanceMeters)")
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StatTile(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        color = colorScheme.surfaceVariant,
+        tonalElevation = 8.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.headlineMedium,
+                color = colorScheme.onBackground
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun InfoRow(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground
+        )
     }
 }

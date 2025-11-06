@@ -11,6 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -155,7 +156,12 @@ fun LoginContent(
         AlertDialog(
             onDismissRequest = {},
             confirmButton = {
-                TextButton(onClick = onPermissionRequest) {
+                TextButton(
+                    onClick = onPermissionRequest,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
                     Text("설정으로 이동")
                 }
             },
@@ -166,10 +172,20 @@ fun LoginContent(
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (showProgress) {
-            CircularProgressIndicator()
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
         } else {
-            Button(onClick = onLoginClick) {
-                Text("Google 로그인")
+            Button(
+                onClick = onLoginClick,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Text(
+                    text = "Google 로그인",
+                    style = MaterialTheme.typography.titleLarge
+                )
             }
         }
     }

@@ -1,14 +1,34 @@
 package kr.co.dongnae.runner.screen
 
 import android.annotation.SuppressLint
-import android.app.Activity
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonDefaults.buttonColors
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -19,14 +39,13 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kr.co.dongnae.runner.model.FirestoreUser
 import kr.co.dongnae.runner.viewModel.RunningViewModel
-import java.util.logging.Handler
 
 
 // ViewModel과 Navigation 로직을 담당하는 상위 컴포저블
@@ -117,6 +136,17 @@ fun RunningContent(
 ) {
     val cameraPositionState = rememberCameraPositionState()
     val coroutineScope = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
+    val colorScheme = MaterialTheme.colorScheme
+    val gradient = remember(colorScheme) {
+        Brush.verticalGradient(
+            colors = listOf(
+                colorScheme.background,
+                colorScheme.surfaceVariant,
+                colorScheme.background
+            )
+        )
+    }
 
     // routePoints가 변경될 때마다 카메라 위치를 업데이트합니다.
     LaunchedEffect(routePoints) {
@@ -130,8 +160,8 @@ fun RunningContent(
     var isCountingDown by remember { mutableStateOf(false) }
     var countdownValue by remember { mutableStateOf(3) }
     LaunchedEffect(isCountingDown) {
-        if(isCountingDown) {
-            for(i in 3 downTo 0) {
+        if (isCountingDown) {
+            for (i in 3 downTo 0) {
                 countdownValue = i
                 delay(1000)
             }
@@ -140,127 +170,164 @@ fun RunningContent(
         }
     }
 
-
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(gradient)
+            .padding(horizontal = 24.dp, vertical = 24.dp)
     ) {
-        // [START] 상단: 경과 시간, 거리, 페이스 표시
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // 경과 시간
-            Text(
-                text = "⏱ 경과 시간: ${elapsedTime / 60}분 ${elapsedTime % 60}초",
-                style = MaterialTheme.typography.headlineSmall
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                // 거리 (소수점 둘째 자리까지 표시)
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "거리 (km)", style = MaterialTheme.typography.bodySmall)
-                    Text(
-                        text = String.format("%.2f", distanceKm),
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                }
-
-                // 페이스
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "페이스 (min/km)", style = MaterialTheme.typography.bodySmall)
-                    Text(
-                        text = pace,
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                }
-
-                //심박수
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "심박수", style = MaterialTheme.typography.bodySmall)
-                    Text(
-                        text = "000",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-        // [END] 상단
-
-        // 지도
-        if (routePoints.isNotEmpty()) {
-            GoogleMap(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                cameraPositionState = cameraPositionState
-            ) {
-                // 경로 Polyline
-                Polyline(
-                    points = routePoints,
-                    color = Color.Red,
-                    width = 8f
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = String.format("%02d:%02d", elapsedTime / 60, elapsedTime % 60),
+                    style = MaterialTheme.typography.displayMedium,
+                    color = colorScheme.secondary
+                )
+                Text(
+                    text = if (isRunning && !isPaused) "피치를 올려보세요!" else "러닝을 시작해보세요",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = colorScheme.onBackground
                 )
             }
-        } else {
-            Box(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentAlignment = Alignment.Center
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                when {
-                    routePoints.isNotEmpty() && isRunning -> {}
-                    isCountingDown -> {
-                        Text(
-                            text = countdownValue.toString(),
-                            style = MaterialTheme.typography.displayLarge.copy(color = Color.Red)
+                MetricTile(
+                    modifier = Modifier.weight(1f),
+                    label = "거리",
+                    value = String.format("%.2f", distanceKm),
+                    unit = "km"
+                )
+                MetricTile(
+                    modifier = Modifier.weight(1f),
+                    label = "페이스",
+                    value = pace.ifBlank { "--'--" },
+                    unit = "min/km"
+                )
+                MetricTile(
+                    modifier = Modifier.weight(1f),
+                    label = "심박수",
+                    value = "000",
+                    unit = "bpm"
+                )
+            }
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(320.dp),
+                shape = RoundedCornerShape(32.dp),
+                color = colorScheme.surfaceVariant,
+                tonalElevation = 10.dp
+            ) {
+                if (routePoints.isNotEmpty()) {
+                    GoogleMap(
+                        modifier = Modifier.fillMaxSize(),
+                        cameraPositionState = cameraPositionState,
+                        uiSettings = MapUiSettings(zoomControlsEnabled = false, compassEnabled = false)
+                    ) {
+                        Polyline(
+                            points = routePoints,
+                            color = colorScheme.secondary,
+                            width = 8f
                         )
                     }
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        when {
+                            isCountingDown -> {
+                                Text(
+                                    text = countdownValue.toString(),
+                                    style = MaterialTheme.typography.displayLarge,
+                                    color = colorScheme.secondary
+                                )
+                            }
 
-                    countdownValue == 0 -> {
-                        Text(
-                            "기록 측정이\n시작됩니다!",
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.displayLarge.copy(color = Color.Black)
-                        )
-                    }
+                            countdownValue == 0 -> {
+                                Text(
+                                    text = "기록이 시작됩니다!",
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.headlineLarge,
+                                    color = colorScheme.onBackground
+                                )
+                            }
 
-                    else -> {
-                        Text("시작 버튼을 누르면 기록됩니다!")
+                            isRunning -> {
+                                CircularProgressIndicator(color = colorScheme.primary)
+                            }
+
+                            else -> {
+                                Text(
+                                    text = "시작 버튼을 눌러 러닝을 기록하세요",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }
-        }
 
-        // 버튼 영역
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            if (isRunning && !isPaused) {
-                Button(onClick = onPause) {
-                    Text("일시정지")
-                }
-            } else if (isRunning && isPaused) {
-                Button(onClick = onResume) {
-                    Text("재개")
-                }
-            } else {
-                Button(onClick = { isCountingDown = true }) {
-                    Text("시작")
-                }
-            }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                color = colorScheme.surfaceVariant,
+                tonalElevation = 6.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = if (isRunning) "러닝 상태" else "대기 상태",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = colorScheme.onBackground
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        RunnerButton(
+                            modifier = Modifier.weight(1f),
+                            text = when {
+                                isRunning && !isPaused -> "일시정지"
+                                isRunning && isPaused -> "재개"
+                                else -> "시작"
+                            },
+                            onClick = {
+                                when {
+                                    isRunning && !isPaused -> onPause()
+                                    isRunning && isPaused -> onResume()
+                                    else -> {
+                                        countdownValue = 3
+                                        isCountingDown = true
+                                    }
+                                }
+                            }
+                        )
 
-            Button(onClick = {
-                coroutineScope.launch {
-                    countdownValue = 3
-                    onStop()
+                        RunnerButton(
+                            modifier = Modifier.weight(1f),
+                            text = "종료",
+                            onClick = {
+                                coroutineScope.launch {
+                                    countdownValue = 3
+                                    onStop()
+                                }
+                            }
+                        )
+                    }
                 }
-            }) {
-                Text("종료")
             }
         }
     }
@@ -270,6 +337,72 @@ fun RunningContent(
 @Composable
 fun rememberNavControllerStub(): NavController {
     return rememberNavController()
+}
+
+@Composable
+private fun MetricTile(
+    modifier: Modifier = Modifier,
+    label: String,
+    value: String,
+    unit: String
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        tonalElevation = 8.dp,
+        color = colorScheme.surfaceVariant
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalAlignment = Alignment.Start
+        ) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.headlineMedium,
+                color = colorScheme.onBackground
+            )
+            Text(
+                text = unit,
+                style = MaterialTheme.typography.labelMedium,
+                color = colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun RunnerButton(
+    modifier: Modifier = Modifier,
+    text: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        shadowElevation = 0.dp
+    ) {
+        androidx.compose.material3.Button(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ),
+            onClick = onClick
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.titleLarge
+            )
+        }
+    }
 }
 
 // --- RunningContent 상태별 Preview ---
