@@ -43,13 +43,16 @@ fun RunScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     val user by viewModel.user.collectAsState()
+    val currentRegion by viewModel.currentRegion.collectAsState()
 
     LaunchedEffect(uid) {
         viewModel.loadUser(uid)
+        viewModel.updateCurrentRegion()
     }
 
     RunContent(
         user = user,
+        currentRegion = currentRegion,
         onLogout = {
             viewModel.logout(activity)
             navController.navigate("login") {
@@ -63,6 +66,9 @@ fun RunScreen(
         },
         onRunningRecord = {
             navController.navigate("records/$uid")
+        },
+        onCommunity = {
+            navController.navigate("community/$uid")
         }
     )
 }
@@ -70,9 +76,11 @@ fun RunScreen(
 @Composable
 fun RunContent(
     user: FirestoreUser?,
+    currentRegion: String?,
     onLogout: () -> Unit,
     onRunningStart: () -> Unit,
-    onRunningRecord: () -> Unit
+    onRunningRecord: () -> Unit,
+    onCommunity: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val gradient = remember(colorScheme) {
@@ -131,10 +139,10 @@ fun RunContent(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         InfoRow(label = "이메일", value = user.email)
-                        InfoRow(label = "활동 지역", value = user.region)
-                        user.last_login?.let {
-                            InfoRow(label = "마지막 로그인", value = it.toDate().toString())
-                        }
+                        InfoRow(
+                            label = "활동 지역",
+                            value = currentRegion ?: user.region
+                        )
                     }
                 }
 
@@ -155,6 +163,7 @@ fun RunContent(
                         )
                         RunnerButton(text = "러닝 시작", onClick = onRunningStart)
                         RunnerButton(text = "러닝 기록", onClick = onRunningRecord)
+                        RunnerButton(text = "커뮤니티", onClick = onCommunity)
                         RunnerButton(text = "로그아웃", onClick = onLogout)
                     }
                 }
@@ -196,8 +205,10 @@ fun RunScreenPreview() {
     )
     RunContent(
         user = fakeUser,
+        currentRegion = "서울",
         onLogout = {},
         onRunningStart = {},
         onRunningRecord = {},
+        onCommunity = {}
     )
 }

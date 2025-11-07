@@ -23,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -317,4 +318,22 @@ private fun InfoRow(
             color = MaterialTheme.colorScheme.onBackground
         )
     }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun StatTilePreview() {
+    StatTile(
+        label = "러닝 시간",
+        value = "1시간 30분 45초"
+    )
+}
+
+@Preview(showBackground = true)
+@Composable
+fun InfoRowPreview() {
+    InfoRow(
+        label = "시작 시각",
+        value = "2024.01.15 07:30"
+    )
 }

@@ -56,7 +56,6 @@ fun SplashContent() {
         }
     }
 }
-
 @Preview(showBackground = true)
 @Composable
 fun SplashScreenPreview() {
