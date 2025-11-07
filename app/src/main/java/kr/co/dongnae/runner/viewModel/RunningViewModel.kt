@@ -3,6 +3,7 @@ package kr.co.dongnae.runner.viewModel
 import android.Manifest
 import android.app.Application
 import android.content.Intent
+import android.widget.Toast
 import androidx.annotation.RequiresPermission
 import androidx.lifecycle.AndroidViewModel
 import com.google.android.gms.maps.model.LatLng
@@ -73,27 +74,35 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         val distanceBackup = TrackingManager.distanceKm.value
         val paceBackup = TrackingManager.pace.value
         val startBackup = TrackingManager.startTimestamp
-        val pauseMillisBackup = TrackingManager.pauseDurationMillis
         val endTs = com.google.firebase.Timestamp.now()
 
-        // 2. 서비스 종료 명령 전송
+        // 2. 현재까지의 총 일시정지 시간 계산 (현재 일시정지 중인 시간 포함)
+        val totalPauseMillis = TrackingManager.getTotalPauseDurationMillis()
+
+        // 3. 서비스 종료 명령 전송
         val intent = Intent(getApplication(), RunningService::class.java).apply {
             action = "ACTION_STOP_RUNNING"
         }
         getApplication<Application>().startService(intent)
 
-        // 3. 데이터 저장 로직 (기존과 동일)
+        // 4. 일시정지 시간을 제외한 실제 러닝 시간 계산
+        val startTime = startBackup?.toDate()?.time ?: endTs.toDate().time
+        val endTime = endTs.toDate().time
+        val totalDurationMillis = endTime - startTime
+        val actualDurationSeconds = maxOf(0, ((totalDurationMillis - totalPauseMillis) / 1000).toInt())
+
+        // 5. 데이터 저장 로직
         val polyline = encodePolyline(pointsBackup)
         val paceMinPerKm: Double? =
-            if (distanceBackup > 0.01 && elapsedBackup > 0)
-                ((elapsedBackup - pauseMillisBackup / 1000.0) / 60.0) / distanceBackup else null
+            if (distanceBackup > 0.01 && actualDurationSeconds > 0)
+                (actualDurationSeconds / 60.0) / distanceBackup else null
 
         val data = hashMapOf(
             "user_id" to uid,
             "region" to region,
             "start_time" to (startBackup ?: endTs),
             "end_time" to endTs,
-            "duration_seconds" to TrackingManager.getDurationSeconds(),
+            "duration_seconds" to actualDurationSeconds, // 일시정지 시간 제외한 실제 러닝 시간
             "distance_km" to distanceBackup,
             "pace_per_km" to (paceMinPerKm ?: 0.0),
             "pace_display" to paceBackup,
@@ -101,13 +110,27 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
             "routes_polyline" to polyline
         )
 
-        // 4. TrackingManager 상태 초기화 (데이터 저장 후)
+        // 6. TrackingManager 상태 초기화 (데이터 저장 후)
         TrackingManager.stopAndReset() // 이 부분이 중요: 모든 StateFlow 초기화
 
         FirebaseFirestore.getInstance()
             .collection("runRecord")
             .add(data)
-            .addOnSuccessListener { Log.d("RunningVM", "러닝 기록 저장 완료") }
-            .addOnFailureListener { e -> Log.e("RunningVM", "러닝 기록 저장 실패", e) }
+            .addOnSuccessListener { 
+                Log.d("RunningVM", "러닝 기록 저장 완료: duration_seconds=$actualDurationSeconds, totalPauseMillis=$totalPauseMillis, totalDurationMillis=$totalDurationMillis")
+                Toast.makeText(
+                    getApplication(),
+                    "러닝 기록이 저장되었습니다",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            .addOnFailureListener { e -> 
+                Log.e("RunningVM", "러닝 기록 저장 실패", e)
+                Toast.makeText(
+                    getApplication(),
+                    "러닝 기록 저장에 실패했습니다",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
     }
 }

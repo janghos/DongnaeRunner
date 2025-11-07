@@ -99,4 +99,16 @@ object TrackingManager {
         val duration = end - start - pauseDurationMillis
         return maxOf(0, (duration / 1000).toInt())
     }
+
+    /**
+     * 현재까지의 총 일시정지 시간을 반환 (현재 일시정지 중인 시간 포함)
+     */
+    fun getTotalPauseDurationMillis(): Long {
+        val currentPauseTime = if (pauseStartMillis != null && _isPaused.value) {
+            System.currentTimeMillis() - pauseStartMillis!!
+        } else {
+            0L
+        }
+        return pauseDurationMillis + currentPauseTime
+    }
 }
