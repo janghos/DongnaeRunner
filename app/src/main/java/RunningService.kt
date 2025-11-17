@@ -27,6 +27,16 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kr.co.dongnae.runner.MainActivity
 import java.util.Locale
+import androidx.health.services.client.HealthServicesClient
+import androidx.health.services.client.MeasureClient
+import androidx.health.services.client.MeasureCallback
+import androidx.health.services.client.data.DataPointContainer
+import androidx.health.services.client.data.DataType
+import android.util.Log
+import androidx.health.services.client.HealthServices
+import androidx.health.services.client.data.Availability
+import androidx.health.services.client.data.DeltaDataType
+import androidx.health.services.client.getCapabilities
 
 class RunningService : Service() {
 
@@ -40,6 +50,11 @@ class RunningService : Service() {
     private var totalPausedTime = 0L
     private var lastPauseStart: Long? = null
 
+    // Health Services API
+    private var healthServicesClient: HealthServicesClient? = null
+    private var measureClient: MeasureClient? = null
+    private var heartRateCallback: MeasureCallback? = null
+
     companion object {
         const val CHANNEL_ID = "RunningChannel"
         const val NOTIFICATION_ID = 1
@@ -52,6 +67,18 @@ class RunningService : Service() {
         super.onCreate()
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         createNotificationChannel()
+        
+        // Health Services 클라이언트 초기화 (SDK 30 이상에서만)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            try {
+                healthServicesClient = HealthServices.getClient(this)
+                measureClient = healthServicesClient?.measureClient
+            } catch (e: Exception) {
+                Log.e("RunningService", "Health Services 초기화 실패", e)
+            }
+        } else {
+            Log.d("RunningService", "Health Services API는 Android 11 (API 30) 이상에서만 지원됩니다")
+        }
     }
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
@@ -100,6 +127,7 @@ class RunningService : Service() {
             TrackingManager.startTracking()
             startTimer()
             startLocationUpdates()
+            startHeartRateMonitoring()
 
             val notification = buildNotification()
 
@@ -169,6 +197,7 @@ class RunningService : Service() {
         TrackingManager.pauseTracking()
         timerJob?.cancel()
         stopLocationUpdates()
+        stopHeartRateMonitoring()
         updateNotification()
         // 알림 업데이트 등 필요
     }
@@ -182,6 +211,7 @@ class RunningService : Service() {
         TrackingManager.resumeTracking()
         startTimer()
         startLocationUpdates()
+        startHeartRateMonitoring()
         updateNotification()
         // 알림 업데이트 등 필요
     }
@@ -190,6 +220,7 @@ class RunningService : Service() {
         timerJob?.cancel()
         timerJob = null
         stopLocationUpdates()
+        stopHeartRateMonitoring()
         // TrackingManager.stopAndReset() 호출은 ViewModel에서 데이터 저장 후 진행할 수도 있음.
         // 여기서는 서비스 종료 명령만 수행
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -292,6 +323,82 @@ class RunningService : Service() {
         super.onDestroy()
         serviceScope.cancel()
         stopLocationUpdates()
+        stopHeartRateMonitoring()
+    }
+
+    // Health Services API를 사용한 심박수 측정
+    private fun startHeartRateMonitoring() {
+        // SDK 30 미만에서는 심박수 측정 불가
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+            Log.d("RunningService", "심박수 측정은 Android 11 (API 30) 이상에서만 지원됩니다")
+            return
+        }
+        
+        if (heartRateCallback != null) return // 이미 시작됨
+        
+        val client = measureClient ?: run {
+            Log.w("RunningService", "MeasureClient가 없습니다")
+            return
+        }
+
+        serviceScope.launch {
+            try {
+                // 심박수 측정 가능 여부 확인
+                val capabilities = client.getCapabilities()
+                val heartRateSupported = capabilities.supportedDataTypesMeasure.contains(DataType.HEART_RATE_BPM)
+                
+                if (!heartRateSupported) {
+                    Log.w("RunningService", "심박수 측정을 지원하지 않는 기기입니다")
+                    return@launch
+                }
+
+                heartRateCallback = object : MeasureCallback {
+                    override fun onAvailabilityChanged(
+                        dataType: DeltaDataType<*, *>,
+                        availability: Availability
+                    ) {
+                        Log.d("RunningService", "심박수 측정 가용성 변경: $availability")
+                    }
+
+                    override fun onDataReceived(data: DataPointContainer) {
+                        try {
+                            val heartRateData = data.getData(DataType.HEART_RATE_BPM)
+                            heartRateData.firstOrNull()?.let { dataPoint ->
+                                val heartRate = dataPoint.value
+                                if (heartRate != null && heartRate > 0) {
+                                    TrackingManager.updateHeartRate(heartRate.toInt())
+                                    Log.d("RunningService", "심박수 측정: $heartRate bpm")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("RunningService", "심박수 데이터 파싱 실패", e)
+                        }
+                    }
+                }
+
+                client.registerMeasureCallback(
+                    DataType.HEART_RATE_BPM,
+                    heartRateCallback!!
+                )
+                Log.d("RunningService", "심박수 측정 시작")
+            } catch (e: Exception) {
+                Log.e("RunningService", "심박수 측정 시작 실패", e)
+            }
+        }
+    }
+
+    private fun stopHeartRateMonitoring() {
+        heartRateCallback?.let { callback ->
+            serviceScope.launch {
+                try {
+                    measureClient?.unregisterMeasureCallbackAsync(DataType.HEART_RATE_BPM, callback)
+                    Log.d("RunningService", "심박수 측정 중지")
+                } catch (e: Exception) {
+                    Log.e("RunningService", "심박수 측정 중지 실패", e)
+                }
+            }
+            heartRateCallback = null
+        }
     }
 
     // 기존 ViewModel에서 가져온 유틸리티 함수

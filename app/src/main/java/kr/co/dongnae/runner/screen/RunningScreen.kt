@@ -63,6 +63,7 @@ fun RunningScreen(
     val routePoints by viewModel.routePoints.collectAsState()
     val distanceKm by viewModel.distanceKm.collectAsState()
     val pace by viewModel.pace.collectAsState()
+    val currentHeartRate by viewModel.currentHeartRate.collectAsState()
 
     var user by remember { mutableStateOf<FirestoreUser?>(null) }
     var isLoadingUser by remember { mutableStateOf(true) }
@@ -107,6 +108,7 @@ fun RunningScreen(
         routePoints = routePoints,
         distanceKm = distanceKm, // 전달
         pace = pace,             // 전달
+        currentHeartRate = currentHeartRate, // 전달
         onStart =
             {
                 viewModel.startRunning()
@@ -115,7 +117,7 @@ fun RunningScreen(
         onPause = { viewModel.pauseRunning() },
         onResume = { viewModel.resumeRunning() },
         onStop = {
-            viewModel.stopRunningAndSave(user!!.uid, user!!.region, null)
+            viewModel.stopRunningAndSave(user!!.uid, user!!.region)
         }
     )
 }
@@ -129,6 +131,7 @@ fun RunningContent(
     routePoints: List<LatLng>,
     distanceKm: Double, // 추가
     pace: String,       // 추가
+    currentHeartRate: Int?, // 추가
     onStart: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -214,7 +217,7 @@ fun RunningContent(
                 MetricTile(
                     modifier = Modifier.weight(1f),
                     label = "심박수",
-                    value = "000",
+                    value = currentHeartRate?.toString() ?: "--",
                     unit = "bpm"
                 )
             }
@@ -417,6 +420,7 @@ fun RunningContentInitialPreview() {
         routePoints = emptyList(), // No points, shows loading text
         distanceKm = 0.0,          // 추가: 0.0 km
         pace = "--'--",           // 추가: 초기값
+        currentHeartRate = null,   // 추가: 초기 심박수
         onStart = {},
         onPause = {},
         onResume = {},
@@ -439,6 +443,7 @@ fun RunningContentActivePreview() {
         routePoints = mockRoute,
         distanceKm = 0.45,         // 추가: 0.45 km
         pace = "4'30''",           // 추가: mock 페이스
+        currentHeartRate = 145,    // 추가: mock 심박수
         onStart = {},
         onPause = {},
         onResume = {},
@@ -461,6 +466,7 @@ fun RunningContentPausedPreview() {
         routePoints = mockRoute,
         distanceKm = 0.85,         // 추가: 0.85 km
         pace = "4'54''",           // 추가: mock 페이스
+        currentHeartRate = 152,    // 추가: mock 심박수
         onStart = {},
         onPause = {},
         onResume = {},

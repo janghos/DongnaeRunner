@@ -30,6 +30,13 @@ object TrackingManager {
     private val _pace = MutableStateFlow("--'--")
     val pace: StateFlow<String> = _pace
 
+    // 6-1. 현재 심박수 (Int, bpm)
+    private val _currentHeartRate = MutableStateFlow<Int?>(null)
+    val currentHeartRate: StateFlow<Int?> = _currentHeartRate
+
+    // 6-2. 심박수 데이터 리스트 (평균 계산용)
+    private val _heartRateList = MutableStateFlow<List<Int>>(emptyList())
+    val heartRateList: StateFlow<List<Int>> = _heartRateList
 
     // 7. 러닝 시작/종료 시간 (Firebase 저장용)
     var startTimestamp: com.google.firebase.Timestamp? = null
@@ -71,6 +78,8 @@ object TrackingManager {
         _distanceKm.value = 0.0
         _routePoints.value = emptyList()
         _pace.value = "--'--"
+        _currentHeartRate.value = null
+        _heartRateList.value = emptyList()
         startTimestamp = null
         endTimestamp = null
         pauseDurationMillis = 0
@@ -91,6 +100,20 @@ object TrackingManager {
 
     fun updatePace(paceStr: String) {
         _pace.value = paceStr
+    }
+
+    fun updateHeartRate(heartRate: Int) {
+        _currentHeartRate.value = heartRate
+        _heartRateList.value = _heartRateList.value + heartRate
+    }
+
+    fun getAverageHeartRate(): Int? {
+        val list = _heartRateList.value
+        return if (list.isNotEmpty()) {
+            (list.sum().toDouble() / list.size).toInt()
+        } else {
+            null
+        }
     }
 
     fun getDurationSeconds(): Int {

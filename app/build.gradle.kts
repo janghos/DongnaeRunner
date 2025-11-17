@@ -107,4 +107,7 @@ dependencies {
 
     implementation("com.google.maps.android:maps-utils-ktx:5.0.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    
+    // Health Services API (갤럭시 워치 심박수 측정)
+    implementation("androidx.health:health-services-client:1.1.0-alpha05")
 }

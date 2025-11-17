@@ -22,6 +22,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
     val routePoints: StateFlow<List<LatLng>> = TrackingManager.routePoints
     val distanceKm: StateFlow<Double> = TrackingManager.distanceKm
     val pace: StateFlow<String> = TrackingManager.pace
+    val currentHeartRate: StateFlow<Int?> = TrackingManager.currentHeartRate
 
     // 2. ViewModel이 UI에서 사용할 수 있도록 StateFlow를 LiveData처럼 상태로 변환
     // (이 예제에서는 StateFlow를 그대로 노출하여 Coroutine 환경에서 사용 가능)
@@ -67,7 +68,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /** 저장 및 서비스 종료 명령 전송 */
-    fun stopRunningAndSave(uid: String, region: String, avgHeartRate: Int?) {
+    fun stopRunningAndSave(uid: String, region: String) {
         // 1. 서비스 중단 명령 전에 TrackingManager에서 현재 데이터 백업
         val pointsBackup = TrackingManager.routePoints.value.toList()
         val elapsedBackup = TrackingManager.elapsedTime.value
@@ -91,7 +92,10 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
         val totalDurationMillis = endTime - startTime
         val actualDurationSeconds = maxOf(0, ((totalDurationMillis - totalPauseMillis) / 1000).toInt())
 
-        // 5. 데이터 저장 로직
+        // 5. 평균 심박수 계산
+        val avgHeartRate = TrackingManager.getAverageHeartRate()
+
+        // 6. 데이터 저장 로직
         val polyline = encodePolyline(pointsBackup)
         val paceMinPerKm: Double? =
             if (distanceBackup > 0.01 && actualDurationSeconds > 0)
@@ -110,7 +114,7 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
             "routes_polyline" to polyline
         )
 
-        // 6. TrackingManager 상태 초기화 (데이터 저장 후)
+        // 7. TrackingManager 상태 초기화 (데이터 저장 후)
         TrackingManager.stopAndReset() // 이 부분이 중요: 모든 StateFlow 초기화
 
         FirebaseFirestore.getInstance()
