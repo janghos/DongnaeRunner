@@ -67,6 +67,12 @@ fun RunningScreen(
     var user by remember { mutableStateOf<FirestoreUser?>(null) }
     var isLoadingUser by remember { mutableStateOf(true) }
     val coroutineScope = rememberCoroutineScope()
+    
+    // 현재 지역 업데이트
+    LaunchedEffect(Unit) {
+        viewModel.updateCurrentRegion()
+    }
+    
     // Firestore에서 유저 정보 로드
     LaunchedEffect(uid) {
         FirebaseFirestore.getInstance()
@@ -115,7 +121,7 @@ fun RunningScreen(
         onPause = { viewModel.pauseRunning() },
         onResume = { viewModel.resumeRunning() },
         onStop = {
-            viewModel.stopRunningAndSave(user!!.uid, user!!.region, null)
+            viewModel.stopRunningAndSave(user!!.uid)
         }
     )
 }
