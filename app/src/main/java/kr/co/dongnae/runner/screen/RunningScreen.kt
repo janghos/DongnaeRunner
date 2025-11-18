@@ -211,12 +211,12 @@ fun RunningContent(
                     value = pace.ifBlank { "--'--" },
                     unit = "min/km"
                 )
-                MetricTile(
-                    modifier = Modifier.weight(1f),
-                    label = "심박수",
-                    value = "000",
-                    unit = "bpm"
-                )
+//                MetricTile(
+//                    modifier = Modifier.weight(1f),
+//                    label = "심박수",
+//                    value = "000",
+//                    unit = "bpm"
+//                )
             }
 
             Surface(
