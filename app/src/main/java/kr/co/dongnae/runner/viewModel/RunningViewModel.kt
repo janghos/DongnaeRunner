@@ -133,4 +133,16 @@ class RunningViewModel(application: Application) : AndroidViewModel(application)
                 ).show()
             }
     }
+
+    /** 앱 종료 시 기록 초기화 (저장 없이) */
+    fun clearRunningData() {
+        // 서비스 종료 명령 전송
+        val intent = Intent(getApplication(), RunningService::class.java).apply {
+            action = "ACTION_STOP_RUNNING"
+        }
+        getApplication<Application>().startService(intent)
+        
+        // TrackingManager 상태 초기화
+        TrackingManager.stopAndReset()
+    }
 }

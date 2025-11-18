@@ -14,15 +14,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.google.android.gms.auth.api.signin.*
-import com.google.android.gms.common.api.ApiException
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.GoogleAuthProvider
+
 import dagger.hilt.android.AndroidEntryPoint
 import kr.co.dongnae.runner.presentation.login.LoginScreen
 import kr.co.dongnae.runner.presentation.splash.SplashScreen
@@ -32,13 +29,25 @@ import kr.co.dongnae.runner.screen.RunningRecordDetailScreen
 import kr.co.dongnae.runner.screen.RunningRecordScreen
 import kr.co.dongnae.runner.screen.RunningScreen
 import kr.co.dongnae.runner.ui.theme.DongneRunnerTheme
+import kr.co.dongnae.runner.viewModel.RunningViewModel
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private lateinit var runningViewModel: RunningViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        runningViewModel = ViewModelProvider(this)[RunningViewModel::class.java]
         setContent {
             DongnaeRunnerApp()
+        }
+    }
+    override fun onDestroy() {
+        super.onDestroy()
+
+        // 앱 종료 시 기록 초기화 (저장 없이)
+        if (::runningViewModel.isInitialized) {
+            runningViewModel.clearRunningData()
         }
     }
 }
